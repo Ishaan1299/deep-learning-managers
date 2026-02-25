@@ -1,0 +1,42 @@
+# UPI Fraud Detection using Recurrent Neural Network (LSTM)
+
+This project aims to detect fraudulent UPI transactions by learning sequential behavioral
+patterns using a Long Short-Term Memory (LSTM) Recurrent Neural Network built in PyTorch.
+
+## Proposed Architecture
+
+### 1. Data Pipeline (`data/`)
+- Raw NPCI monthly UPI statistics (2021–2024) loaded from three Excel files.
+- Calibration of realistic transaction parameters (average amount, volume) from NPCI data.
+- Synthetic transaction sequences generated with two profile types:
+  - **Normal sessions**: Low-amount, known payees, regular hours, stable velocity.
+  - **Fraud sessions**: Escalating pattern — device change → velocity spike → large transfers to new payees at unusual hours.
+- Label noise (7%) added to simulate real-world ambiguity.
+- Features: amount, hour_of_day, day_of_week, is_weekend, is_late_night, is_new_payee,
+  device_changed, high_amount_flag, txn_velocity, time_since_last, cumulative_amount_ratio, payee_familiarity.
+
+### 2. Model Pipeline (`src/models/`)
+- `lstm_model.py`: PyTorch implementation of a 2-layer stacked LSTM.
+- Architecture:
+  - Input: (batch, seq_len=15, n_features=12)
+  - LSTM: 2 layers × 128 hidden units, dropout=0.3 between layers
+  - Classifier head: Dropout → Linear(128→64) → BatchNorm → ReLU → Dropout → Linear(64→1)
+  - Output: Binary fraud probability via BCEWithLogitsLoss
+- Weighted positive class to handle class imbalance (pos_weight capped at 5.0).
+- Gradient clipping (max_norm=1.0) for training stability.
+
+### 3. Evaluation
+- Metrics: Accuracy, Precision, Recall, F1-Score, ROC-AUC, Confusion Matrix.
+- Business Logic: High Precision (~93%) minimises false alarms for legitimate users;
+  high Recall (~80%) ensures most fraud is caught.
+
+## Verification Plan
+
+### Automated Tests
+- 80/20 stratified train/test split, preserving fraud class ratio.
+- Model evaluated on unseen test set (16,000 sessions).
+
+### Manual Verification
+- Review ROC curve, loss curves, and confusion matrix.
+- Validate that the LSTM captures the sequential escalation pattern (steps 1–8 normal,
+  step 9 device change, steps 10–12 velocity spike, steps 13–15 large fraud transfers).

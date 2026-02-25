@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd:*)",
+      "Bash(python:*)",
+      "Bash(cmd:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(ls -lh /c/Users/Ishaan/.gemini/antigravity/scratch/credit_default_prediction/*.pptx 2>/dev/null && ls -lh /c/Users/Ishaan/.gemini/antigravity/scratch/upi_fraud_detection/*.pptx 2>/dev/null && ls -lh /c/Users/Ishaan/.gemini/antigravity/scratch/food_delivery_sentiment/*.pptx 2>/dev/null)"
+    ]
+  }
+}

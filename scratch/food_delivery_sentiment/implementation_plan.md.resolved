@@ -1,0 +1,55 @@
+# Food Delivery Restaurant Rating Prediction using Recurrent Neural Network (LSTM)
+
+This project applies an LSTM-based Recurrent Neural Network to predict a restaurant's
+rating category (Poor / Average / Good / Very Good / Excellent) on the Zomato platform,
+using the restaurant's cuisine sequence and operational attributes as input.
+
+## Proposed Architecture
+
+### 1. Data Pipeline (`data/`)
+- **Source A:** Zomato CSV (8,652 India restaurants) — Cuisines, Price range, Votes,
+  Has Online delivery, Has Table booking, Rating text, Aggregate rating.
+- **Source B:** 5 Zomato JSON API response files (29,753 India restaurants) — same fields
+  plus city, avg_cost_for_two.
+- Combined after filtering "Not rated" entries: 32,912 restaurant records.
+
+**Feature Engineering:**
+- Cuisine sequences: each restaurant's cuisine string (e.g., "North Indian, Chinese")
+  is tokenized into a variable-length sequence. A vocabulary of 111 unique cuisine types
+  (min_freq ≥ 5) is built. Sequences are padded/truncated to MAX_SEQ_LEN=8.
+- Numerical features: price_range, has_online_del, has_table_book,
+  log_votes, log_cost (log-transformed to reduce skew).
+
+### 2. Model Pipeline (`src/models/`)
+- `lstm_model.py`: PyTorch implementation of the ZomatoLSTM.
+- Architecture:
+  1. **Embedding Layer:** Embedding(111, 32, padding_idx=0) — maps cuisine token IDs
+     to 32-dimensional dense vectors.
+  2. **LSTM:** 2 layers × 128 hidden units, dropout=0.3 between layers.
+     Processes the cuisine token sequence; final hidden state (batch, 128) is used.
+  3. **Concatenation:** LSTM output concatenated with 5 scaled numerical features → (batch, 133).
+  4. **Classifier Head:** Linear(133→128) → BatchNorm → ReLU → Dropout →
+     Linear(128→64) → BatchNorm → ReLU → Linear(64→5).
+  5. **Output:** 5-class softmax (Poor=0, Average=1, Good=2, Very Good=3, Excellent=4).
+- Loss: CrossEntropyLoss with class weights to handle imbalance (Poor only 2.5% of data).
+- Optimizer: Adam (lr=1e-3, weight_decay=1e-5) + StepLR scheduler.
+
+### 3. Evaluation
+- Metrics: Accuracy, Precision, Recall, F1-Score (weighted), per-class breakdown,
+  Confusion Matrix.
+- Business Logic: Per-class precision/recall helps identify which rating tiers the
+  model struggles with most (adjacent classes like "Good" vs "Very Good" naturally
+  confuse any classifier).
+
+## Verification Plan
+
+### Automated Tests
+- 80/20 stratified train/test split (26,329 train, 6,583 test).
+- Model evaluated on unseen test set with class-weighted metrics.
+
+### Manual Verification
+- Review per-class confusion matrix: expect most misclassifications between adjacent
+  rating tiers (e.g., Good/Very Good), not across distant tiers (Poor/Excellent).
+- Confirm that the LSTM's Embedding + LSTM architecture genuinely leverages the
+  sequential nature of cuisine lists (e.g., restaurants offering 4-5 niche cuisines
+  vs. 1-2 mainstream cuisines show different rating patterns).

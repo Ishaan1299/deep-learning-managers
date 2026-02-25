@@ -1,0 +1,23 @@
+# ── Generated processed data (re-created by data_prep.py) ──────────────────
+*/data/processed/
+
+# ── Trained model weights (re-created by lstm_model.py / ann_model.py) ──────
+saved_models/*.pth
+credit_default_prediction/saved_models/*.pth
+upi_fraud_detection/saved_models/*.pth
+food_delivery_sentiment/saved_models/*.pth
+
+# ── Large Zomato JSON files (>10 MB each — too large for plain git) ──────────
+Food_Delivery/file2.json
+Food_Delivery/file3.json
+Food_Delivery/file4.json
+
+# ── Python bytecode ──────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ── OS noise ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

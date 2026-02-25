@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Credit Risk Prediction Live Demo</title>
+    <!-- Tailwind CSS for quick, beautiful styling without an external stylesheet -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for the dynamic probability chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        body {
+            background-color: #f3f4f6;
+            background-image: linear-gradient(135deg, #1e3a8a 0%, #312e81 100%);
+            min-height: 100vh;
+            color: #1f2937;
+        }
+    </style>
+</head>
+<body class="p-8 font-sans">
+
+    <div class="max-w-6xl mx-auto">
+        <div class="text-center mb-10 text-white">
+            <h1 class="text-4xl font-extrabold tracking-tight mb-2">Deep Learning for Credit Risk</h1>
+            <p class="text-lg opacity-80">Live PyTorch Neural Network Demo</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Input Control Panel -->
+            <div class="glass p-8">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">Applicant Profile</h2>
+                
+                <p class="text-sm text-gray-600 mb-6 font-medium">
+                    Adjust the sliders below to simulate how changes in financial behavior 
+                    affect the Neural Network's prediction in real-time.
+                </p>
+
+                <div class="space-y-6">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="font-semibold text-gray-700">Recent Income Velocity</label>
+                            <span id="income-val" class="text-blue-600 font-bold">Stable (0)</span>
+                        </div>
+                        <input type="range" id="income_modifier" min="-5" max="5" value="0" step="0.5" 
+                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <p class="text-xs text-gray-500 mt-1">Simulates standard deviations from the average income.</p>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="font-semibold text-gray-700">Delinquency/Risk Weight</label>
+                            <span id="cibil-val" class="text-red-600 font-bold">Baseline (0)</span>
+                        </div>
+                        <input type="range" id="cibil_modifier" min="-5" max="5" value="0" step="0.5" 
+                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <p class="text-xs text-gray-500 mt-1">Simulates recent late payments or hits to the CIBIL score.</p>
+                    </div>
+                </div>
+
+                <button onclick="runPrediction()" class="mt-8 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition-colors duration-200 shadow-lg">
+                    Run PyTorch Prediction
+                </button>
+            </div>
+
+            <!-- Output Panel -->
+            <div class="glass p-8 flex flex-col items-center justify-center min-h-[400px]">
+                <h2 class="text-2xl font-bold mb-2 text-gray-800 border-b w-full text-center pb-2">Network Output</h2>
+                
+                <!-- Loading Spinner -->
+                <div id="loading" class="hidden my-8">
+                    <svg class="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </div>
+
+                <!-- Results -->
+                <div id="results" class="w-full text-center opacity-50 transition-opacity duration-300">
+                    <p class="text-gray-500 mb-1">Predicted Managerial Action:</p>
+                    <h3 id="final-decision" class="text-3xl font-black text-gray-800 mb-6 py-2 px-4 rounded-lg bg-gray-100">Awaiting Signal...</h3>
+                    
+                    <div class="h-64 w-full">
+                        <canvas id="probabilityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update slider values dynamically
+        document.getElementById('income_modifier').addEventListener('input', function(e) {
+            document.getElementById('income-val').innerText = e.target.value > 0 ? `High (+${e.target.value})` : (e.target.value < 0 ? `Low (${e.target.value})` : 'Stable (0)');
+        });
+        
+        document.getElementById('cibil_modifier').addEventListener('input', function(e) {
+            document.getElementById('cibil-val').innerText = e.target.value > 0 ? `Risky (+${e.target.value})` : (e.target.value < 0 ? `Safe (${e.target.value})` : 'Baseline (0)');
+        });
+
+        // Initialize Chart.js
+        let probChart;
+        const ctx = document.getElementById('probabilityChart').getContext('2d');
+        
+        function initChart() {
+            probChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['P1 (Best)', 'P2 (Good)', 'P3 (Moderate)', 'P4 (High Risk)'],
+                    datasets: [{
+                        label: 'Softmax Probability (%)',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(34, 197, 94, 0.8)',  // Green
+                            'rgba(59, 130, 246, 0.8)', // Blue
+                            'rgba(245, 158, 11, 0.8)', // Yellow/Amber
+                            'rgba(239, 68, 68, 0.8)'   // Red
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        }
+        initChart();
+
+        async function runPrediction() {
+            const incomeModifier = document.getElementById('income_modifier').value;
+            const cibilModifier = document.getElementById('cibil_modifier').value;
+            
+            // UI State
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('results').classList.add('opacity-50');
+            
+            try {
+                // Call our local Flask Backend
+                const response = await fetch('http://127.0.0.1:5000/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        income_modifier: incomeModifier,
+                        cibil_modifier: cibilModifier
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if(data.status === 'success') {
+                    // Update the final decision text
+                    const decisionElement = document.getElementById('final-decision');
+                    decisionElement.innerText = data.prediction;
+                    
+                    // Style the decision box based on risk
+                    decisionElement.className = "text-3xl font-black mb-6 py-2 px-4 rounded-lg text-white shadow-md transition-colors duration-300";
+                    if(data.prediction_index === 0) decisionElement.classList.add('bg-green-500');
+                    else if(data.prediction_index === 1) decisionElement.classList.add('bg-blue-500');
+                    else if(data.prediction_index === 2) decisionElement.classList.add('bg-amber-500');
+                    else decisionElement.classList.add('bg-red-500');
+
+                    // Update the chart
+                    probChart.data.datasets[0].data = [
+                        data.probabilities.P1,
+                        data.probabilities.P2,
+                        data.probabilities.P3,
+                        data.probabilities.P4
+                    ];
+                    probChart.update();
+                } else {
+                    alert('Error from PyTorch model: ' + data.message);
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Could not connect to the PyTorch server. Make sure you run: python app.py');
+            } finally {
+                // UI State
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('results').classList.remove('opacity-50');
+            }
+        }
+    </script>
+</body>
+</html>

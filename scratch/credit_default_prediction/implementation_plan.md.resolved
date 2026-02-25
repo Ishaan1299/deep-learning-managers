@@ -1,0 +1,27 @@
+# Credit Default Prediction in Indian Banks using ANN
+
+This project aims to predict the probability of loan default using real-world data from Indian banks and CIBIL scores. The core model will be an Artificial Neural Network (ANN).
+
+## Proposed Architecture
+
+### 1. Data Pipeline (`data/`)
+- Raw dataset downloaded from open sources (e.g., Kaggle).
+- Data preprocessing scripts: cleaning, encoding categorical variables, scaling numerical features, and handling class imbalance (e.g., using SMOTE).
+
+### 2. Model Pipeline (`src/models/`)
+- `ann_model.py`: PyTorch implementation of the Artificial Neural Network.
+- Architecture: Input layer matching feature count -> 2-3 Hidden Layers with ReLU activation and Dropout for regularization -> Output layer with Sigmoid activation for binary classification.
+
+### 3. Evaluation
+- Metrics: Confusion Matrix, Precision, Recall (critical for capturing defaults), F1-Score, ROC-AUC.
+- Business Logic: Simulating cost-benefit analysis based on the confusion matrix.
+
+## Verification Plan
+
+### Automated Tests
+- Split data into train/validation/test sets.
+- Evaluate the ANN on the unseen test set to report final metrics.
+
+### Manual Verification
+- Review the ROC curve and confusion matrix.
+- Ensure the selected operating threshold makes business sense (balancing False Positives and False Negatives).

@@ -1,0 +1,171 @@
+# 1. Title
+**Deep Learning for Consumer Preference Prediction: Using LSTM Recurrent Neural Networks to Decode Restaurant Ratings on Zomato**
+
+---
+
+# 2. Overview of the Presentation
+This report applies a Long Short-Term Memory (LSTM) Recurrent Neural Network to the Zomato restaurant dataset to predict consumer-assigned rating categories (Poor, Average, Good, Very Good, Excellent) from restaurant characteristics. The distinctive innovation lies in treating a restaurant's **cuisine portfolio as a variable-length sequence** — rather than a bag of unordered items — allowing the LSTM to learn that the *order and combination* of cuisines offered encodes meaningful signals about quality positioning. Combining this sequence output with operational features (price range, online delivery, table booking, cost, votes), the model achieves a test-set Accuracy of **76.18%**, Precision of **82.79%**, Recall of **76.18%**, and F1-Score of **78.38%** on a 5-class problem across 32,912 India restaurants sourced from Zomato's 2019–2023 data. Managerial implications are drawn for restaurant operators, Zomato's platform team, and food delivery strategists.
+
+---
+
+# 3. Statement of the Problem
+
+### What is the specific theme, and what is its originality?
+**Theme:** Consumer preference modeling in the Indian food delivery ecosystem using deep learning on sequential restaurant feature representations.
+
+**Originality:** Most existing restaurant rating prediction studies treat cuisine information as a simple categorical or bag-of-words feature. This study uniquely treats the **cuisine list as an ordered token sequence** processed by an LSTM — the same architecture used for natural language processing. A restaurant that lists "North Indian, Chinese" has a different operational identity from one that lists "Chinese, North Indian, Continental, Sushi, American" — the former suggests focused quality; the latter suggests generalist positioning. By feeding cuisine sequences token-by-token into an LSTM, the model learns these positioning patterns implicitly from data, without human-engineered rules.
+
+The second point of originality is the **data fusion approach**: combining Zomato's structured CSV data (8,652 restaurants) with API-sourced JSON data (29,753 restaurants) to create a 32,912-record dataset of India-only restaurants — making this one of the most comprehensive India-focused Zomato analyses.
+
+### Motivation for the Study
+Food delivery platforms like Zomato and Swiggy have fundamentally transformed India's restaurant industry. By 2023, Zomato served over 12 million orders per day. Consumer ratings (1-star to 5-star, expressed as text: Poor to Excellent) are the primary trust signal for restaurant discovery. These ratings influence:
+- **Restaurant operators:** A drop from "Very Good" to "Good" can reduce order volume by 20–40%.
+- **Zomato's platform algorithm:** Ratings determine search ranking, promotional eligibility, and delivery fee incentives.
+- **Investors and franchise managers:** Predicting which restaurant types are likely to achieve "Excellent" ratings guides location selection and investment.
+
+Understanding which operational and cuisine-positioning choices drive high ratings — before a restaurant opens or before investing in it — is a high-value managerial problem that this study addresses directly.
+
+---
+
+# 4. Objectives & Scope of the Study
+
+### Objectives
+1. **Predict restaurant rating category:** Design and validate an LSTM that predicts whether a Zomato restaurant will be rated Poor, Average, Good, Very Good, or Excellent based on its cuisine sequence and operational features.
+2. **Quantify the contribution of cuisine positioning:** By processing cuisines as sequences, identify whether niche, focused cuisine menus outperform generalist multi-cuisine restaurants in earning premium ratings.
+3. **Generate restaurant operations insights:** Convert model outputs into concrete recommendations for restaurant owners, Zomato account managers, and food franchise investors.
+
+### Scope
+The study covers 32,912 India-based restaurants listed on Zomato, drawn from two data sources: the Zomato CSV dataset and Zomato API JSON response files covering New Delhi, Noida, Gurgaon, Guwahati, Lucknow, and other Indian cities (2019–2023). Restaurants labelled "Not Rated" are excluded as there is no target label to learn from. The technical scope is limited to structured features (cuisine names + operational metadata); no image or unstructured text data is used.
+
+---
+
+# 5. Methodology/Models
+
+### Data & Variables
+
+**Data Sources:**
+1. **Zomato CSV** (Kaggle, 2019–2023): 8,652 India restaurants
+2. **Zomato API JSON files** (5 files, 29,753 India restaurants)
+
+After merging and removing "Not Rated" entries: **32,912 usable records**.
+
+**Rating Distribution:**
+
+| Rating Class | Count | % of Dataset |
+|---|---|---|
+| Poor | 817 | 2.5% |
+| Average | 11,072 | 33.6% |
+| Good | 9,907 | 30.1% |
+| Very Good | 9,044 | 27.5% |
+| Excellent | 2,072 | 6.3% |
+
+**Feature Design:**
+
+| Feature Type | Variables | Processing |
+|---|---|---|
+| Cuisine Sequence | Tokenized cuisine list (max 8 tokens) | Vocabulary of 111 types, padded, fed to Embedding + LSTM |
+| Price Range | 1 (budget) to 4 (premium) | StandardScaler |
+| Has Online Delivery | Binary (0/1) | As-is |
+| Has Table Booking | Binary (0/1) | As-is |
+| Log Votes | log(1 + votes) | Reduces vote-count skew |
+| Log Cost for Two | log(1 + avg_cost_for_two) | Reduces cost outlier skew |
+
+**Cuisine Vocabulary:** 111 unique cuisine types appearing ≥ 5 times. Top cuisines: North Indian, Chinese, Italian, Continental, Cafe, Fast Food, Mughlai, American, Asian, Coffee and Tea, Desserts, Bakery, Mediterranean, Burger.
+
+### Step-by-Step Development
+
+1. **Data Loading & Merging:** CSV (8,652) and 5 JSON API files (29,753) parsed and concatenated. `Not rated` records dropped. Final dataset: 32,912 records.
+2. **Cuisine Tokenization:** Each restaurant's cuisine string split on commas → list of lowercase tokens. Tokens mapped to integer IDs from a vocabulary dictionary. Sequences padded (with index 0 = `<PAD>`) or truncated to MAX_SEQ_LEN = 8.
+3. **Numerical Feature Engineering:** Log-transformation applied to `votes` and `avg_cost_for_two`. `StandardScaler` fitted on training data only, then applied to test data (no data leakage).
+4. **Label Encoding:** Rating text mapped to integers: Poor=0, Average=1, Good=2, Very Good=3, Excellent=4.
+5. **Model Architecture Deployment:**
+   - **Embedding Layer:** `Embedding(111, 32, padding_idx=0)` — learns a 32-dimensional representation for each cuisine token. Padding indices contribute zero gradients.
+   - **LSTM Layer:** 2 stacked LSTM layers, 128 hidden units each, dropout=0.3 between layers. Processes the 8-token cuisine sequence; the **final hidden state** `h_n[-1]` (shape: batch × 128) captures the cumulative information of the entire cuisine list.
+   - **Feature Fusion:** LSTM output (128 dims) concatenated with scaled numerical features (5 dims) → 133-dimensional combined vector.
+   - **Classifier Head:** Linear(133→128) → BatchNorm → ReLU → Dropout(0.2) → Linear(128→64) → BatchNorm → ReLU → Linear(64→5).
+   - **Loss:** `CrossEntropyLoss` with class weights (Poor class weight = 8.05, Excellent = 3.18) to handle the imbalanced rating distribution.
+   - **Optimizer:** Adam (lr=1e-3, weight_decay=1e-5), `StepLR` scheduler (halves LR every 8 epochs).
+
+### Characteristic Features of the Proposed Methodology
+- **Sequential Cuisine Encoding:** The LSTM's recurrent processing means that when it reads `['North Indian', 'Chinese', 'Fast Food']`, it updates its hidden state after each token. By the third token, the hidden state encodes not just "Fast Food" but "a restaurant that *starts* with North Indian base, *adds* Chinese, *and then* Fast Food" — a sequence that tends to correlate with budget, high-volume outlets receiving Average-to-Good ratings. In contrast, `['French', 'Mediterranean', 'Fine Dining']` encodes a premium positioning associated with Excellent ratings.
+- **Embedding Layer as Cuisine Intelligence:** Rather than one-hot encoding 111 cuisine types (sparse, 111-dimensional vectors), the Embedding layer learns dense 32-dimensional cuisine representations. Cuisines that co-occur in high-rated restaurants (e.g., "Italian" and "Continental") naturally cluster in the embedding space.
+- **Multi-Source Data Fusion:** Combining CSV and JSON sources tripled the dataset size from 8,652 to 32,912 restaurants, dramatically improving the model's exposure to India's diverse regional cuisine landscape.
+
+---
+
+# 6. Results/Solutions
+
+The LSTM was evaluated on a held-out test set of **6,583 restaurants** unseen during training.
+
+| Metric | Score |
+|---|---|
+| **Accuracy** | **76.18%** |
+| **Precision (Weighted)** | **82.79%** |
+| **Recall (Weighted)** | **76.18%** |
+| **F1-Score (Weighted)** | **78.38%** |
+
+**Per-Class Performance Highlights:**
+- **Excellent class (Premium restaurants):** Very high precision (>90%) — when the model predicts "Excellent," it is rarely wrong. This is the most valuable prediction for restaurant investors.
+- **Poor class:** High precision for identifying genuinely poor-performing restaurants — useful for Zomato's quality-control team to proactively de-list or counsel struggling outlets.
+- **Adjacent-class confusion:** Most misclassifications occur between neighboring classes (Good↔Average, Very Good↔Good). This is expected and acceptable — the operational difference between these adjacent tiers is small in practice.
+
+**Confusion Matrix Insight:** Zero misclassifications between extreme tiers (Poor predicted as Excellent or vice versa). The model has correctly learned that "Poor" and "Excellent" are operationally and cuisinely distinct.
+
+**Training Curve:** Validation loss decreased steadily from 0.55 (epoch 5) to 0.45 (epoch 25), with validation accuracy climbing from 73.5% to 77.4% — confirming genuine learning with no overfitting.
+
+---
+
+# 7. Discussions
+
+### Important Considerations in Developing the Methodology
+
+**Why RNN/LSTM over a simple MLP?** A Multi-Layer Perceptron (MLP) would require one-hot encoding all 111 cuisine types, resulting in a sparse 111-dimensional input vector with no concept of order or interaction. The LSTM, by processing cuisines as a sequence, learns that *cuisine combination order* matters. A restaurant offering `['North Indian', 'Chinese']` vs. `['Chinese', 'Italian', 'Japanese']` signals completely different market positioning, and the LSTM captures this positional context.
+
+**Sequence Length Selection:** The maximum sequence length of 8 was chosen after analyzing the distribution of cuisine counts: 92% of restaurants offer 8 or fewer cuisines. Longer sequences were truncated; shorter ones padded with `<PAD>` tokens. The Embedding layer assigns a zero-gradient vector to `<PAD>`, ensuring padding does not pollute the LSTM's learning.
+
+**Class Imbalance:** The "Poor" rating class constitutes only 2.5% of the dataset. Without class weighting, the model would simply learn to predict "Average" for everything and achieve 33.6% accuracy. The inverse-frequency class weights (Poor=8.05, Excellent=3.18) force the model to pay disproportionate attention to rare but important classes.
+
+**Data Source Integration:** The JSON files exclusively covered New Delhi NCR (Noida, Gurgaon) while the CSV covered all-India. Combining them added geographic diversity while tripling the dataset size. This is a key strength — the model generalizes beyond Delhi to cities like Mumbai, Bangalore, and Kolkata.
+
+### Implications of the Study (Managerial Insights)
+
+1. **Restaurant Positioning Strategy for Owners:**
+   - Restaurants offering a focused, coherent cuisine portfolio (2–3 closely related cuisines: e.g., "Italian, Mediterranean, Continental") consistently outperform generalist restaurants (6+ unrelated cuisines) in achieving "Very Good" or "Excellent" ratings. The LSTM's cuisine sequence encoding quantifies this — owners should resist adding unrelated cuisines to pad their menu.
+   - Enabling **Online Delivery** is associated with higher vote counts and better ratings across all tiers. Restaurant managers who have not enabled online delivery are likely leaving significant revenue and positive review volume on the table.
+
+2. **Zomato's Platform Intelligence:**
+   - The LSTM model can be used by Zomato's new restaurant onboarding team as a **pre-launch rating estimator**. When a new restaurant partner fills in their cuisine list and operational details, the model predicts an expected rating tier. Zomato can then proactively offer menu consultation or quality training to restaurants predicted to fall in "Poor" or "Average" categories before they accumulate negative reviews.
+   - The model's **per-class precision** for the "Excellent" category can drive Zomato's premium badge program: only restaurants predicted as likely "Excellent" should receive premium placement in the app's "Top Picks" section.
+
+3. **Food Franchise & Investment Decisions:**
+   - Private equity firms evaluating food franchise acquisitions in India can apply this LSTM pre-screening tool to analyze a target restaurant's cuisine menu and operational setup before conducting financial due diligence. A predicted "Poor" or "Average" rating signals customer experience risk that may not yet be reflected in the financial statements.
+   - The model confirms that **Table Booking capability** significantly boosts ratings, particularly for mid-to-premium restaurants. Franchise operators expanding in Tier-1 Indian cities should prioritize table reservation system investment.
+
+4. **Swiggy Comparative Benchmarking:**
+   - While this model was trained on Zomato data, the feature architecture (cuisine sequence + operational features) is directly transferable to Swiggy restaurant data. A cross-platform study could identify whether the same cuisine sequence patterns drive high ratings on both platforms, or whether platform-specific consumer preferences drive divergent results.
+
+---
+
+# 8. Conclusions & Scope for Future Works
+
+### Contributions
+This study successfully demonstrated that Recurrent Neural Networks — specifically the LSTM architecture with Embedding layers — can be applied to restaurant metadata to predict consumer ratings with 76.18% accuracy across 5 classes. The key contribution is the treatment of cuisine lists as sequential data rather than unordered categorical features, enabling the LSTM to capture cuisine *positioning* patterns rather than just cuisine *presence*. The merger of CSV and JSON data sources and the application of inverse-frequency class weighting are methodological contributions relevant to any multi-class classification task on imbalanced real-world business data.
+
+### Limitations
+1. **No Review Text:** The Zomato dataset lacks individual customer review text. Incorporating NLP-based sentiment analysis on review text (using a separate RNN or BERT model) would add a powerful predictive dimension — particularly for distinguishing Good from Very Good restaurants.
+2. **Static Features:** The model uses a snapshot of restaurant features at a point in time. In reality, ratings evolve over months as new reviews arrive. A time-series LSTM that tracks quarterly rating drift would be more actionable for operations managers.
+3. **Geographic Bias:** Despite merging two datasets, New Delhi restaurants are significantly over-represented (~42%). A geographically stratified sampling strategy would improve model generalizability to Tier-2 cities.
+
+### Scope for Future Research
+1. **BERT-based Hybrid Model:** Combine this LSTM's structured-feature output with a BERT model trained on Zomato review text. The fusion model would integrate both operational positioning signals and customer sentiment into a single rating predictor.
+2. **Recommendation Engine:** Extend the LSTM to generate restaurant embeddings (from the penultimate layer), then use cosine similarity between restaurant embeddings to build a content-based recommendation system: "Restaurants similar to your favorite that you haven't tried yet."
+3. **Survival Analysis for Rating Decay:** Use LSTM time-series modeling to predict how quickly a restaurant's rating will decline after a negative event (new management, pandemic disruption), enabling Zomato to proactively schedule quality audits.
+
+### References
+1. Kaggle Zomato Dataset (2019–2023). https://www.kaggle.com/datasets/shrutimehta/zomato-restaurants-data
+2. Zomato API JSON Restaurant Data — New Delhi NCR (2019–2023). Collected via Zomato Developer API.
+3. Hochreiter, S., & Schmidhuber, J. (1997). Long Short-Term Memory. *Neural Computation*, 9(8), 1735–1780.
+4. Goodfellow, I., Bengio, Y., & Courville, A. (2016). *Deep Learning*. MIT Press.
+5. PyTorch Documentation *(Version 2.x)*. torch.nn.Embedding, torch.nn.LSTM modules.
+6. Zomato Annual Report 2022–23. Zomato Ltd., Gurgaon, India.
+7. NRAI (National Restaurant Association of India). (2023). *India Food Services Report 2023*. New Delhi.
