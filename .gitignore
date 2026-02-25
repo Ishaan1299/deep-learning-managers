@@ -1,0 +1,25 @@
+# Gemini CLI internals
+brain/
+conversations/
+implicit/
+knowledge/
+installation_id
+mcp_config.json
+
+# Trained model weights (large binary files)
+**/*.pth
+
+# Raw & processed data (large files)
+scratch/*/data/raw/
+scratch/*/data/processed/
+scratch/UPI_Fraud/
+scratch/Food_Delivery/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
